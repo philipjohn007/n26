@@ -1,21 +1,32 @@
 package com.n26.transaction.controller;
 
 import java.util.*;
+import java.util.function.Predicate;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.*;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.bind.annotation.*;
 
 import com.n26.transaction.exception.*;
-import com.n26.transaction.model.Transaction;
+import com.n26.transaction.model.*;
 
 @RestController
 @RequestMapping("/transactions")
 public class TransactionController {
+
+	private static final Logger LOG = LoggerFactory.getLogger(TransactionController.class);
+
 	List<Transaction> transactions = new ArrayList<>();
-	
+	Statistics statistics = new Statistics();
+
+	Predicate<Transaction> transactionsPredicate = transaction -> 
+		System.currentTimeMillis() - transaction.getTimestamp() > 60000;
+
 	@GetMapping()
-	public ResponseEntity<List<Transaction>> getTransactions() {
-		return new ResponseEntity<>(transactions, HttpStatus.OK);
+	public @ResponseBody ResponseEntity<Statistics> getStatistics() {
+		return new ResponseEntity<>(statistics, HttpStatus.OK);
 	}
 
 	@PostMapping()
@@ -29,8 +40,26 @@ public class TransactionController {
 		}
 
 		transactions.add(transaction);
+		updateStatistics();
 
 		return new ResponseEntity<Transaction>(HttpStatus.CREATED);
 	}
 
+	// Check for and remove old transactions every one second
+	@Scheduled(fixedRate = 1000)
+    public void removeOldTransactions() {
+		boolean isRemoved = this.transactions.removeIf(transactionsPredicate);
+		if (!transactions.isEmpty() && isRemoved) {
+			updateStatistics();
+		}
+    }
+
+	private void updateStatistics() {
+		LOG.info("Updating statistics");
+		statistics.setCount(Long.valueOf(this.transactions.size()));
+		statistics.setMax(Collections.max(transactions, Comparator.comparing(Transaction::getAmount)).getAmount());
+		statistics.setMin(Collections.min(transactions, Comparator.comparing(Transaction::getAmount)).getAmount());
+		statistics.setAvg(this.transactions.stream().mapToDouble(t -> t.getAmount()).average().orElse(0));
+		statistics.setSum(this.transactions.stream().mapToDouble(t -> t.getAmount()).sum());
+	}
 }

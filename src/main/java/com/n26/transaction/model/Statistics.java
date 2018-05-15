@@ -8,6 +8,14 @@ public class Statistics {
 	private Double min;
 	private Long count;
 
+	public Statistics() {
+		this.sum = 0.0;
+		this.avg = 0.0;
+		this.max = 0.0;
+		this.min = 0.0;
+		this.count = Long.valueOf(0);
+	}
+	
 	public Double getSum() {
 		return sum;
 	}

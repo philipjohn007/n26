@@ -13,7 +13,7 @@ import com.n26.transaction.exception.*;
 import com.n26.transaction.model.*;
 
 @RestController
-@RequestMapping("/transactions")
+@RequestMapping("/api")
 public class TransactionController {
 
 	private static final Logger LOG = LoggerFactory.getLogger(TransactionController.class);
@@ -24,12 +24,12 @@ public class TransactionController {
 	Predicate<Transaction> transactionsPredicate = transaction -> 
 		System.currentTimeMillis() - transaction.getTimestamp() > 60000;
 
-	@GetMapping()
+	@GetMapping("/statistics")
 	public @ResponseBody ResponseEntity<Statistics> getStatistics() {
 		return new ResponseEntity<>(statistics, HttpStatus.OK);
 	}
 
-	@PostMapping()
+	@PostMapping("/transactions")
 	public ResponseEntity<Transaction> createTransaction(@RequestBody Transaction transaction) {
 		if (Objects.isNull(transaction.getTimestamp())) {
 			throw new EmptyTimestampException();
@@ -49,8 +49,12 @@ public class TransactionController {
 	@Scheduled(fixedRate = 1000)
     public void removeOldTransactions() {
 		boolean isRemoved = this.transactions.removeIf(transactionsPredicate);
-		if (!transactions.isEmpty() && isRemoved) {
-			updateStatistics();
+		if (isRemoved) {
+			if (this.transactions.isEmpty()) {
+				statistics = new Statistics();
+			} else {
+				updateStatistics();
+			}
 		}
     }
 

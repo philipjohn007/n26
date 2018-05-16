@@ -15,8 +15,10 @@ import org.springframework.web.context.WebApplicationContext;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.n26.transaction.TransactionApplication;
+import com.n26.transaction.model.Statistics;
 import com.n26.transaction.model.Transaction;
 
+import static org.junit.Assert.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.*;
@@ -38,6 +40,7 @@ public class TransactionControllerTests {
 	private static Transaction INVALID_TRANSACTION;
 	private static Transaction EXPIRED_TRANSACTION;
 	private static Transaction VALID_TRANSACTION;
+	private static Transaction NEAR_EXPIRY_TRANSACTION;
 
 	private MediaType contentType = new MediaType(MediaType.APPLICATION_JSON.getType(),
             MediaType.APPLICATION_JSON.getSubtype(),
@@ -57,8 +60,9 @@ public class TransactionControllerTests {
     	INVALID_TRANSACTION = new Transaction(DEFAULT_AMOUNT, null);
     	EXPIRED_TRANSACTION = new Transaction(DEFAULT_AMOUNT, System.currentTimeMillis() - 61000);
     	VALID_TRANSACTION = new Transaction(DEFAULT_AMOUNT, System.currentTimeMillis());
+    	NEAR_EXPIRY_TRANSACTION = new Transaction(DEFAULT_AMOUNT, System.currentTimeMillis() - 55000);
     }
-    
+
     @Test
     public void testTransactionCreateThrowBadRequest() throws Exception {
         performCreateTransaction(mapper.writeValueAsString(INVALID_TRANSACTION))
@@ -111,5 +115,24 @@ public class TransactionControllerTests {
 
     private ResultActions performGetStatistics() throws Exception {
     	return mockMvc.perform(get("/api/statistics"));
+    }
+
+    @Test
+    public void testTransactionStatisticsUpdateAfterExpiredTransaction() throws Exception {
+    	performCreateTransaction(mapper.writeValueAsString(NEAR_EXPIRY_TRANSACTION));
+
+    	MvcResult mvcResult = performGetStatistics()
+                .andExpect(status().isOk())
+                .andReturn();
+    	Statistics initialResult = mapper.readValue(mvcResult.getResponse().getContentAsString(), Statistics.class);
+    	Thread.sleep(6000);
+
+    	mvcResult = performGetStatistics()
+                .andExpect(status().isOk())
+                .andReturn();
+    	Statistics finalResult = mapper.readValue(mvcResult.getResponse().getContentAsString(), Statistics.class);
+
+    	assertTrue(initialResult.getCount() > finalResult.getCount());
+    	assertTrue(initialResult.getSum() > finalResult.getSum());
     }
 }
